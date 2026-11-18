@@ -1,56 +1,74 @@
-# HIV/AIDS papers from OpenAlex — top 200 by citations
+# Screening summary
 
-Pulled **2026-11-18 01:41 UTC** from the [OpenAlex Works API](https://docs.openalex.org/).
+Rolled up from `free_screens.md` (all 92 XML full texts) and `model_flags.md` (25 most-cited complete XMLs). No new model reads.
 
-## Query
+## Free deterministic screens (`free_screens.md`)
 
-- Publication years: **2005–2026**
-- Sort: `cited_by_count:desc`
-- Concepts (OR): `C3013748606, C2780195530, C2777583353, C2910359755, C2778451633, C2910020833, C2992699665, C2910823671, C2908958731, C2909828532, C2909201284, C2779898580, C2779127605`
-- Topics (OR): `T10112, T10082, T10526, T11860, T11655, T14334, T13761, T13586`
-- Combined with a union of two requests (OpenAlex cannot OR across attributes).
-- Topic side uses `primary_topic.id`. Concept side keeps a work only when an HIV/AIDS concept has score > 0 (the API's `concepts.id` filter otherwise returns leftover score-0 tags on unrelated high-cite papers).
+Ran 2026-11-18 03:01 UTC on every `.xml` in `fulltexts/`.
 
-## Coverage of the ranking pool
+| Check | Count |
+|---|---:|
+| papers screened | 92 |
+| retractions | 0 |
+| text-reuse pairs | 0 |
+| language flags | 0 |
+| statistical flags | 1 |
 
-- Works matching the **concept** filter: **491,276**
-- Works matching the **primary topic** filter: **344,584**
-- Papers considered before the top-200 cut: **at least 491,276** and **at most 835,860** (union of the two API filters; exact unique count would require paging the full ~0.3–0.7M-work sets).
-- Candidate records downloaded: **1,200** (78 dropped as score-0 HIV concept tags with no HIV/AIDS primary topic; 322 collapsed as DOI/title duplicates).
-- Rows in the CSV: **200**
+Retractions used OpenAlex `is_retracted` for 91/91 DOIs. OpenRetractions.com was not reachable.
 
-## Among the 200
+**Statistical flag**
 
-- Open access (`is_oa=true`): **136** (68.0%)
-- With an OA / full-text URL: **136** (68.0%)
-- With a PMCID: **115** (57.5%)
-- Open full text **or** PMCID: **136** (68.0%)
-- Truncated abstract present: **135** (67.5%)
-- Publication years in the list: **2005–2022**
-- Citation counts: **983–7628** (median 1436)
+- `2014_Grant_Uptake_of_pre_exposure_prophylaxis_sexual.xml` — n-of-m percent mismatch: 1125/1603 (76%) (expected ~70.2%).
 
-## Rate-limit and coverage notes
+That is the only file that triggered a free-screen flag.
 
-- HTTP requests this run: **8**; 429 responses: **0**; retries: **0**.
-- The client uses the OpenAlex polite pool (`mailto` + identifying User-Agent) and waits ~120 ms between requests. Without an API key, OpenAlex currently shares a small free daily budget per IP; this export is a handful of cheap `/works` calls and stays well under that.
-- API notice: No API key, so this request shares one free daily budget ($0.10) with everyone on your network's IP address. The mailto parameter doesn't raise this limit. Get a free key with its own $1/day at https://openalex.org/settings/api and add api_key=YOUR_KEY to your requests. An AI agent can get one for its user in one call: POST https://api.openalex.org/api-keys with {"email": "<your user's email>"}; we email them a link, and the key works once they click it. Docs for agents: https://help.openalex.org/llms.txt
-- OpenAlex concepts and topics are classifier tags, not a MeSH explosion. Papers about HIV that were never tagged will be missing; papers tagged HIV/AIDS that are only tangentially related can appear.
-- Abstracts arrive as an inverted index and are reconstructed, then cut to 500 characters. Some works have no abstract in OpenAlex.
-- `oa_url` is the OpenAlex open-access URL when present, otherwise the best OA PDF / landing page. Links can rot; PMCID is the more stable full-text handle when it exists.
-- 2026 is the current/upcoming calendar year, so that slice is incomplete. Recent years (2023–2026) also rarely reach a top-200 citation cutoff; this export’s years stop at 2022.
-- Citation counts are OpenAlex `cited_by_count` (cross-publisher), not Web of Science or Scopus, and they move as the graph updates.
+## Model audit (`model_flags.md`)
 
-## Top 10 (preview)
+One pass each on the 25 most-cited complete JATS XMLs in `fulltexts/`, ranked by OpenAlex `cited_by_count`. Papers were treated as data. The audit looked only for numerical inconsistencies, statistical reporting problems, claims not supported by the paper’s own data or methods, and citations that appear to misstate the cited work. Guideline-length papers were read from structured extracts; trial papers from the same extracts in full.
 
-| # | Year | Cites | OA | PMCID | Title |
-|---|------|------:|----|-------|-------|
-| 1 | 2011 | 7628 | yes | PMC3200068 | Prevention of HIV-1 Infection with Early Antiretroviral Therapy |
-| 2 | 2010 | 5608 | yes | PMC3079639 | Preexposure Chemoprophylaxis for HIV Prevention in Men Who Have Sex with Men |
-| 3 | 2020 | 5499 | yes | PMC7121492 | A Trial of Lopinavir–Ritonavir in Adults Hospitalized with Severe Covid-19 |
-| 4 | 2006 | 5450 | yes |  | Development of a simple noninvasive index to predict significant fibrosis in patients with HIV/HCV coinfection†‡ |
-| 5 | 2006 | 3986 | no |  | Microbial translocation is a cause of systemic immune activation in chronic HIV infection |
-| 6 | 2017 | 3902 | yes | PMC6945892 | Can Treatment Adherence Be Improved by Using Rubin's Four Tendencies Framework to Understand a Patient's Response to Expectations |
-| 7 | 2007 | 3623 | yes | PMC7119119 | 2007 Guideline for Isolation Precautions: Preventing Transmission of Infectious Agents in Health Care Settings |
-| 8 | 2012 | 3597 | yes | PMC3770474 | Antiretroviral Prophylaxis for HIV Prevention in Heterosexual Men and Women |
-| 9 | 2006 | 3591 | no |  | Youth risk behavior surveillance--United States, 2005. |
-| 10 | 2021 | 3547 | yes | PMC8344968 | Sexually Transmitted Infections Treatment Guidelines, 2021 |
+**Token cost.** The host does not expose per-call token usage. Approximate input: ~853,000 characters of extracted text (~213,000 tokens at 4 characters/token). Combined XML of the 25 files is ~11.2 million characters; four guideline XMLs exceed 1 million characters each and were not re-read as raw XML.
+
+**Result.** 8 flags in 6 papers. Nothing clear in the other 19.
+
+### Flags
+
+**`2020_Cao_A_Trial_of_Lopinavir_Ritonavir_in.xml` (3)**
+
+1. Same ITT primary-endpoint hazard ratio reported three ways: abstract 1.24 (0.90–1.72); results 1.31 (0.95–1.85); Table 3 1.31 (0.95–1.80).
+2. Day-28 detectable RNA in the lopinavir–ritonavir arm is 60.3% in results and 40.7% (then “approximately … 40%”) in the discussion, with no reconciliation.
+3. Glucocorticoid use stated as 33.0% vs 35.7%; Table 2 is 32/99 (32.3%) vs 35/100 (35.0%).
+
+**`2011_Cohen_Prevention_of_HIV_1_Infection_with.xml` (1)**
+
+- “Of all treated participants, 66% initiated a second-line regimen” after 50 virologic failures among 1,070 treated (~5%). The paper does not give a numerator that makes 66% of all treated participants.
+
+**`2005_Auvert_Randomized_Controlled_Intervention_Trial_of_Male.xml` (1)**
+
+- Rate-ratio CIs labeled with percent signs: RR 0.40 (95% CI: 0.24%–0.68%), and a cited meta-analysis RR 0.42 (95% CI: 0.34%–0.54%). Those bounds are ratios, not percentages.
+
+**`2012_Baeten_Antiretroviral_Prophylaxis_for_HIV_Prevention_in.xml` (1)**
+
+- 17 + 13 = 30 post-randomization infections on the active arms, then a plasma-tenofovir analysis of 29 subjects, with no stated reason for the omitted one.
+
+**`2017_Rajasingham_Global_burden_of_disease_of_HIV.xml` (1)**
+
+- 181,100 cryptococcal deaths claimed as 15% of AIDS-related deaths. 181,100 / 1.4 million = 12.9%; 181,100 / 1.1 million = 16.5%. Neither of the paper’s own AIDS-death figures yields 15%.
+
+**`2015_Murray_Circulating_microRNAs_in_Sera_Correlate_with.xml` (2)**
+
+1. Table 4 miR-150 case IQR `4.48 (4.48, 3.35)` has an upper bound below the median.
+2. Supporting caption names miR-245 among nadir-CD4 correlates; results name miR-145.
+
+### Nothing clear (19 papers)
+
+`2010_Grant_Preexposure_Chemoprophylaxis_for_HIV_Prevention_in.xml`, `2017_Kirk_Can_Treatment_Adherence_Be_Improved_by.xml`, `2007_Siegel_2007_Guideline_for_Isolation_Precautions_Preventing.xml`, `2021_Workowski_Sexually_Transmitted_Infections_Treatment_Guidelines_2021.xml`, `2009_Pappas_Clinical_Practice_Guidelines_for_the_Management.xml`, `2022_Coleman_Standards_of_Care_for_the_Health.xml`, `2015_INSIGHT_START_Study_Group_Initiation_of_Antiretroviral_Therapy_in_Early.xml`, `2010_Perfect_Clinical_Practice_Guidelines_for_the_Management.xml`, `2010_Karim_Effectiveness_and_Safety_of_Tenofovir_Gel.xml`, `2013_Deeks_The_end_of_AIDS_HIV_infection.xml`, `2012_Kuybeda_A_collaborative_framework_for_3D_alignment.xml`, `2015_McCormack_Pre_exposure_prophylaxis_to_prevent_the.xml`, `2011_Workowski_Sexually_Transmitted_Diseases_Treatment_Guidelines_2010.xml`, `2015_Hughto_Transgender_stigma_and_health_A_critical.xml`, `2012_Haynes_Immune_Correlates_Analysis_of_an_HIV.xml`, `2008_Buchbinder_Efficacy_assessment_of_a_cell_mediated.xml`, `2009_Chomont_HIV_reservoir_size_and_persistence_are.xml`, `2019_Rowley_Chlamydia_gonorrhoea_trichomoniasis_and_syphilis_global.xml`, `2016_Cohen_Antiretroviral_Therapy_for_the_Prevention_of.xml`.
+
+Guideline extracts were truncated relative to the raw XML. Citation-by-citation checking of guideline reference lists was not done. Empty `[]` / `(REF)` markers in XMLs are leftover stripped cross-references, not chatbot language.
+
+## Combined count
+
+| Source | Papers | Flags |
+|---|---:|---:|
+| Free screens (92 XML) | 92 | 1 statistical (Grant 2014 uptake paper; not in the model-audit 25) |
+| Model audit (top 25 complete XML) | 25 | 8 in 6 papers |
+| Overlap of those two sets | — | none |
