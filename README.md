@@ -52,11 +52,13 @@ PDFs are often blocked by a browser check; the XML fallback is the public
 full-text copy. Delays 1–2 seconds between papers.
 
 ```bash
-python3 download_fulltexts.py
+python3 download_fulltexts.py --n 30
+python3 download_fulltexts.py --offset 30 --skip-existing
 ```
 
 Writes `fulltexts/{year}_{first_author}_{short_title}.pdf` (or `.xml`) and
-`download_log.csv`.
+updates `download_log.csv`. `--skip-existing` leaves files already in
+`fulltexts/` alone. `--offset 30` continues after the first batch.
 
 ## How the filter is built
 

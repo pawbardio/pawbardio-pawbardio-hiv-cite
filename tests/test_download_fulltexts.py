@@ -31,6 +31,8 @@ class SelectTests(unittest.TestCase):
         ]
         picked = select_papers(rows, n=2)
         self.assertEqual([r["title"] for r in picked], ["oa", "pmc only"])
+        rest = select_papers(rows, offset=2)
+        self.assertEqual([r["title"] for r in rest], ["both"])
 
 
 class FilenameTests(unittest.TestCase):

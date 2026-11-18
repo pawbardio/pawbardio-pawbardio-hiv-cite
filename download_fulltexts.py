@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Download full text for the first N open-access HIV/AIDS papers.
+Download full text for open-access HIV/AIDS papers.
 
 Reads data/hiv_aids_top200.csv, keeps rows where is_oa is true or pmcid is
-set, and downloads the first 30 of those into fulltexts/.
+set, and downloads them into fulltexts/. Use --offset 30 to continue after
+the first batch. Papers that already have a file in fulltexts/ are skipped.
 
 Priority per paper
 ------------------
@@ -17,6 +18,7 @@ Usage
 -----
     python3 download_fulltexts.py
     python3 download_fulltexts.py --n 30 --csv data/hiv_aids_top200.csv
+    python3 download_fulltexts.py --offset 30 --skip-existing
 
 Filenames: {year}_{first_author}_{short_title}.pdf (or .xml)
 """
@@ -56,15 +58,54 @@ def is_true(value: str | None) -> bool:
     return (value or "").strip().lower() in {"true", "1", "yes"}
 
 
-def select_papers(rows: list[dict[str, str]], n: int) -> list[dict[str, str]]:
-    """Preserve CSV order; keep is_oa or non-empty pmcid; cut to n."""
-    picked: list[dict[str, str]] = []
-    for row in rows:
-        if is_true(row.get("is_oa")) or (row.get("pmcid") or "").strip():
-            picked.append(row)
-        if len(picked) >= n:
-            break
-    return picked
+def is_oa_or_pmc(row: dict[str, str]) -> bool:
+    return is_true(row.get("is_oa")) or bool((row.get("pmcid") or "").strip())
+
+
+def select_papers(
+    rows: list[dict[str, str]],
+    n: int = 0,
+    offset: int = 0,
+) -> list[dict[str, str]]:
+    """Preserve CSV order; keep is_oa or non-empty pmcid.
+
+    `offset` skips that many eligible rows (e.g. 30 to continue after the
+    first batch). `n` <= 0 means 'the rest'.
+    """
+    eligible = [row for row in rows if is_oa_or_pmc(row)]
+    sliced = eligible[max(offset, 0) :]
+    if n > 0:
+        sliced = sliced[:n]
+    return sliced
+
+
+def log_key(row: dict[str, str]) -> str:
+    doi = (row.get("doi") or "").strip().lower()
+    if doi:
+        return f"doi:{doi}"
+    return f"title:{(row.get('title') or '').strip().lower()}"
+
+
+def load_log(path: str) -> list[dict[str, str]]:
+    log_file = Path(path)
+    if not log_file.is_file():
+        return []
+    with log_file.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def merge_log(
+    existing: list[dict[str, str]], new_rows: list[dict[str, str]]
+) -> list[dict[str, str]]:
+    """Keep prior log rows; replace a row when the same paper is retried."""
+    by_key: dict[str, dict[str, str]] = {}
+    order: list[str] = []
+    for row in existing + new_rows:
+        key = log_key(row)
+        if key not in by_key:
+            order.append(key)
+        by_key[key] = {col: row.get(col, "") for col in LOG_COLUMNS}
+    return [by_key[key] for key in order]
 
 
 def _slug(text: str, max_words: int = 6, max_chars: int = 60) -> str:
@@ -167,6 +208,9 @@ class Downloader:
             f"hiv-aids-fulltext-download/1.0 (mailto:{mailto}; research full-text fetch)"
         )
         self._last_request_at = 0.0
+        # PMC website PDFs are often recaptcha-gated from datacenter IPs.
+        # After the first captcha, skip further PDF attempts and go to XML.
+        self.skip_pmc_pdf = False
 
     def polite_pause(self, lo: float | None = None, hi: float | None = None) -> None:
         lo = self.delay_min if lo is None else lo
@@ -286,7 +330,8 @@ def download_one(
     last_error = "no download URL"
 
     if pmcid:
-        for url in pmc_pdf_urls(pmcid):
+        pdf_urls = [] if downloader.skip_pmc_pdf else pmc_pdf_urls(pmcid)
+        for url in pdf_urls:
             last_url = url
             data, kind, final_url, error = downloader.try_as_fulltext(
                 url, accept="application/pdf,*/*"
@@ -298,6 +343,7 @@ def download_one(
             # PMC's web PDFs are often behind a reCAPTCHA interstitial from
             # datacenter IPs; extra PDF URLs will fail the same way.
             if kind == "captcha":
+                downloader.skip_pmc_pdf = True
                 break
 
         xml_url = pmc_xml_url(pmcid, downloader.mailto)
@@ -328,6 +374,14 @@ def write_file(path: Path, data: bytes) -> None:
     tmp.replace(path)
 
 
+def count_fulltexts(directory: Path) -> int:
+    return sum(
+        1
+        for path in directory.iterdir()
+        if path.is_file() and path.suffix.lower() in {".pdf", ".xml"} and path.stat().st_size > 0
+    )
+
+
 def run(
     csv_path: str,
     out_dir: str,
@@ -337,12 +391,13 @@ def run(
     delay_min: float,
     delay_max: float,
     skip_existing: bool = False,
+    offset: int = 0,
 ) -> int:
     with open(csv_path, newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
-    papers = select_papers(rows, n)
+    papers = select_papers(rows, n=n, offset=offset)
     if not papers:
-        print(f"No OA/PMC rows in {csv_path}", file=sys.stderr)
+        print(f"No OA/PMC rows left in {csv_path} (offset={offset})", file=sys.stderr)
         return 1
 
     dest = Path(out_dir)
@@ -350,36 +405,25 @@ def run(
     downloader = Downloader(mailto=mailto, delay_min=delay_min, delay_max=delay_max)
 
     log_rows: list[dict[str, str]] = []
-    succeeded = 0
-    failed = 0
+    new_succeeded = 0
+    new_failed = 0
+    skipped = 0
+    attempted = 0
 
-    print(f"Downloading {len(papers)} papers into {dest}/ …", file=sys.stderr)
+    print(
+        f"Downloading {len(papers)} papers into {dest}/ "
+        f"(offset={offset}, skip_existing={skip_existing}) …",
+        file=sys.stderr,
+    )
     for i, row in enumerate(papers, start=1):
         title = row.get("title") or ""
         print(f"[{i}/{len(papers)}] {title[:80]}", file=sys.stderr)
         already = existing_file(dest, make_basename(row)) if skip_existing else None
         if already:
-            succeeded += 1
+            skipped += 1
             print(f"    skip existing {already.name}", file=sys.stderr)
-            pmcid = (row.get("pmcid") or "").strip()
-            reused_url = (
-                pmc_xml_url(pmcid, mailto)
-                if pmcid
-                else (row.get("oa_url") or "")
-            )
-            log_rows.append(
-                {
-                    "title": title,
-                    "doi": row.get("doi") or "",
-                    "pmcid": pmcid,
-                    "url_used": reused_url,
-                    "status": "success",
-                    "filename": already.name,
-                }
-            )
-            if i < len(papers):
-                downloader.polite_pause()
             continue
+        attempted += 1
         data, ext, url_used, error = download_one(downloader, row)
         filename = ""
         status = "fail"
@@ -389,14 +433,14 @@ def run(
                 write_file(path, data)
                 filename = path.name
                 status = "success"
-                succeeded += 1
+                new_succeeded += 1
                 print(f"    saved {filename}  ({len(data):,} bytes)", file=sys.stderr)
             except OSError as exc:
                 error = f"could not write file: {exc}"
-                failed += 1
+                new_failed += 1
                 print(f"    FAIL write: {exc}", file=sys.stderr)
         else:
-            failed += 1
+            new_failed += 1
             print(f"    FAIL {error}", file=sys.stderr)
         log_rows.append(
             {
@@ -408,21 +452,27 @@ def run(
                 "filename": filename,
             }
         )
-        # Polite delay between papers (1–2 s by default), even after a skip.
         if i < len(papers):
             downloader.polite_pause()
 
+    merged = merge_log(load_log(log_path), log_rows)
     with open(log_path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=LOG_COLUMNS)
         writer.writeheader()
-        writer.writerows(log_rows)
+        writer.writerows(merged)
 
+    total_files = count_fulltexts(dest)
     print(
-        f"\nDone. succeeded={succeeded}  failed={failed}  "
-        f"total={len(papers)}\nLog: {log_path}",
+        f"\nDone.\n"
+        f"  new downloads succeeded: {new_succeeded}\n"
+        f"  new downloads failed:    {new_failed}\n"
+        f"  skipped (already on disk): {skipped}\n"
+        f"  attempted this run:      {attempted}\n"
+        f"  total papers in {dest}/: {total_files}\n"
+        f"  log rows: {len(merged)}  ({log_path})",
         file=sys.stderr,
     )
-    return 0 if succeeded else 1
+    return 0 if (new_succeeded or skipped or total_files) else 1
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -430,7 +480,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--csv", default=DEFAULT_CSV)
     parser.add_argument("--out-dir", default=DEFAULT_OUT_DIR)
     parser.add_argument("--log", default=DEFAULT_LOG)
-    parser.add_argument("--n", type=int, default=30)
+    parser.add_argument(
+        "--n",
+        type=int,
+        default=0,
+        help="Max eligible papers to fetch after --offset. 0 = the rest.",
+    )
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Skip this many eligible OA/PMC rows (use 30 to continue the first batch).",
+    )
     parser.add_argument("--mailto", default=DEFAULT_MAILTO)
     parser.add_argument("--delay-min", type=float, default=1.0)
     parser.add_argument("--delay-max", type=float, default=2.0)
@@ -455,6 +516,7 @@ def main(argv: list[str] | None = None) -> int:
         delay_min=args.delay_min,
         delay_max=args.delay_max,
         skip_existing=args.skip_existing,
+        offset=args.offset,
     )
 
 
