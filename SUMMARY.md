@@ -1,6 +1,8 @@
 # Screening summary
 
-Rolled up from `free_screens.md` (all 92 XML full texts) and `model_flags.md` (25 most-cited complete XMLs). No new model reads.
+Locked 2026-11-18. Flags are leads pending verification. No further model reads in this version.
+
+Rolled up from `free_screens.md` (all 92 XML full texts) and `model_flags.md` (25 most-cited complete XMLs). No new model reads. Spot-check of those flags is in `verified_flags.md`.
 
 ## Free deterministic screens (`free_screens.md`)
 

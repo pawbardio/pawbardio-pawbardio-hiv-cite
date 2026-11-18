@@ -60,7 +60,9 @@ Writes `fulltexts/{year}_{first_author}_{short_title}.pdf` (or `.xml`) and
 updates `download_log.csv`. `--skip-existing` leaves files already in
 `fulltexts/` alone. `--offset 30` continues after the first batch.
 
-## Citation graph
+## Visualization
+
+`citation_graph.html` is an early interactive citation graph of the top-200 papers with flagged papers marked.
 
 No citation-edge list ships with the export, so the graph uses sparse
 year-proximity links as a stand-in. Red nodes are papers named in
