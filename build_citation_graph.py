@@ -12,6 +12,7 @@ log-citation distance as a weak co-citation proxy).
 from __future__ import annotations
 
 import csv
+import html
 import json
 import math
 import re
@@ -132,6 +133,8 @@ def graph_payload(papers: list[dict], flagged_titles: set[str], links: list[dict
         nodes.append(
             {
                 **p,
+                "title": html.escape(p["title"], quote=False),
+                "authors": html.escape(p["authors"], quote=False),
                 "flagged": p["title"].casefold() in flagged_lower,
             }
         )
