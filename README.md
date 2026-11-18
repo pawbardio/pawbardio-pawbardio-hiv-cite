@@ -60,6 +60,16 @@ Writes `fulltexts/{year}_{first_author}_{short_title}.pdf` (or `.xml`) and
 updates `download_log.csv`. `--skip-existing` leaves files already in
 `fulltexts/` alone. `--offset 30` continues after the first batch.
 
+## Free deterministic screens
+
+```bash
+python3 screen_fulltexts.py
+```
+
+Writes `free_screens.md`: retractions (OpenAlex `is_retracted`), placeholder /
+chatbot language, long identical passages across papers with no shared
+authors, and basic statistical impossibilities.
+
 ## How the filter is built
 
 OpenAlex can OR values *inside* one attribute, but not *across* attributes.
