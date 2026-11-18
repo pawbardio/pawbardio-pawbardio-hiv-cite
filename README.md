@@ -39,8 +39,24 @@ python3 openalex_hiv_aids.py --n 200 --oversample 600 \
 The mailto address puts you in OpenAlex’s polite pool.
 
 ```bash
-python3 -m unittest tests.test_openalex_hiv_aids
+python3 -m unittest tests.test_openalex_hiv_aids tests.test_download_fulltexts
 ```
+
+## Download full texts
+
+Takes the first 30 rows in `data/hiv_aids_top200.csv` that are open access
+or have a PMCID, and writes PDF/XML files into `fulltexts/`.
+
+Priority: PMC PDF, then PMC XML (NCBI eutils), then `oa_url`. PMC website
+PDFs are often blocked by a browser check; the XML fallback is the public
+full-text copy. Delays 1–2 seconds between papers.
+
+```bash
+python3 download_fulltexts.py
+```
+
+Writes `fulltexts/{year}_{first_author}_{short_title}.pdf` (or `.xml`) and
+`download_log.csv`.
 
 ## How the filter is built
 
