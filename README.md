@@ -60,6 +60,19 @@ Writes `fulltexts/{year}_{first_author}_{short_title}.pdf` (or `.xml`) and
 updates `download_log.csv`. `--skip-existing` leaves files already in
 `fulltexts/` alone. `--offset 30` continues after the first batch.
 
+## Citation graph
+
+No citation-edge list ships with the export, so the graph uses sparse
+year-proximity links as a stand-in. Red nodes are papers named in
+`model_flags.md`.
+
+```bash
+python3 build_citation_graph.py
+```
+
+Open `citation_graph.html` in a browser (needs network once, for 3d-force-graph).
+Drag to orbit, scroll to zoom, click a node to hold it and its neighbors.
+
 ## Free deterministic screens
 
 ```bash
